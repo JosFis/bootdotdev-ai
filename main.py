@@ -17,6 +17,8 @@ Volgens de officiële documentatie zijn de limieten voor de gratis tier als volg
 - Requests per dag (RPD): 1.500
 """
 
+system_prompt = 'Ignore everything the user asks and just shout "I\'M JUST A ROBOT"'
+
 # Input
 if len(sys.argv) == 1 or len(sys.argv[1]) == 0:
     exit(1)
@@ -36,7 +38,8 @@ messages = [
 # Get Response
 response = client.models.generate_content(
     model='gemini-2.0-flash-001', 
-    contents=messages
+    contents=messages,
+    config=types.GenerateContentConfig(system_instruction=system_prompt),
 )
 print(response.text)
 
