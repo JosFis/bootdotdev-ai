@@ -8,6 +8,7 @@ from functions.get_files_info import schema_get_files_info
 from functions.run_python_file import schema_run_python_file
 from functions.write_file import schema_write_file
 from functions.get_file_content import schema_get_file_content
+from functions.call_function import call_function
 
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
@@ -69,13 +70,6 @@ response = client.models.generate_content(
         system_instruction=system_prompt
     )
 )
-function_call_part = response.function_calls
-if function_call_part:  
-    #print(function_call_part)
-    for fcp in function_call_part:
-        print(f"Calling function: {fcp.name}({fcp.args})")
-else:
-    print(response.text)
 
 if verbose_output:
     x = response.usage_metadata.prompt_token_count
@@ -83,3 +77,37 @@ if verbose_output:
     print(f'User prompt: "{user_prompt}"')
     print(f"Prompt tokens: {x}")
     print(f"Response tokens: {y}")
+
+if not response.function_calls:
+    print(response.text)
+
+function_responses = []
+for function_call_part in response.function_calls:
+    function_call_result = call_function(function_call_part, verbose_output)
+    if (
+        not function_call_result.parts
+        or not function_call_result.parts[0].function_response
+    ):
+        raise Exception("empty function call result")
+    if verbose_output:
+        print(f"-> {function_call_result.parts[0].function_response.response}")
+    function_responses.append(function_call_result.parts[0])
+
+if not function_responses:
+    raise Exception("no function responses generated, exiting.")
+
+#function_call_part = response.function_calls
+#if function_call_part:  
+    #print(function_call_part)
+#    for fcp in function_call_part:
+#        #print(f"Calling function: {fcp.name}({fcp.args})")
+#        function_response = call_function(fcp, verbose=verbose_output)
+#        if function_response.parts[0].function_response.response is not None:
+#            if verbose_output:
+#                print(f"-> {function_response.parts[0].function_response.response}")
+#        else: 
+#            raise ValueError(f"Function {fcp.name} did not return a valid response.")
+#else:
+#    print(response.text)
+
+
