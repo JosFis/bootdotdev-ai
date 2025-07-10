@@ -6,6 +6,15 @@ from functions.run_python_file import run_python_file, schema_run_python_file
 from functions.write_file import write_file, schema_write_file
 from functions.config import WORKING_DIR
 
+available_functions = types.Tool(
+    function_declarations=[
+        schema_get_files_info,
+        schema_run_python_file,
+        schema_write_file,
+        schema_get_file_content
+    ]
+)
+
 def call_function(function_call_part, verbose=False):
 
     function_name = function_call_part.name

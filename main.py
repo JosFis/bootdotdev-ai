@@ -4,110 +4,66 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-from functions.get_files_info import schema_get_files_info
-from functions.run_python_file import schema_run_python_file
-from functions.write_file import schema_write_file
-from functions.get_file_content import schema_get_file_content
-from functions.call_function import call_function
+from prompts import system_prompt
+from functions.call_function import call_function, available_functions
 
-load_dotenv()
-api_key = os.environ.get("GEMINI_API_KEY")
-client = genai.Client(api_key=api_key)
+def main():
+    load_dotenv()
 
-"""
-# Gratis gebruikslimieten voor Gemini 2.0 Flash
-Volgens de officiële documentatie zijn de limieten voor de gratis tier als volgt:
+    verbose = "--verbose" in sys.argv
+    args = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
 
-- Requests per minuut (RPM): 15
-- Tokens per minuut (TPM): 1.000.000
-- Requests per dag (RPD): 1.500
-"""
+    if not args:
+        print("AI Code Assistant")
+        print('\nUsage: python main.py "your prompt here" [--verbose]')
+        print('Example: python main.py "How do I fix the calculator?"')
+        sys.exit(1)
 
-system_prompt = """
-You are a helpful AI coding agent.
+    api_key = os.environ.get("GEMINI_API_KEY")
+    client = genai.Client(api_key=api_key)
 
-When a user asks a question or makes a request, make a function call plan. You can perform the following operations:
+    user_prompt = " ".join(args)
 
-- List files and directories
-- Read file contents
-- Execute Python files with optional arguments
-- Write or overwrite files
+    if verbose:
+        print(f"User prompt: {user_prompt}\n")
 
-All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
-"""
-
-available_functions = types.Tool(
-    function_declarations=[
-        schema_get_files_info,
-        schema_run_python_file,
-        schema_write_file,
-        schema_get_file_content
+    messages = [
+        types.Content(role="user", parts=[types.Part(text=user_prompt)]),
     ]
-)
 
-# Input
-if len(sys.argv) == 1 or len(sys.argv[1]) == 0:
-    exit(1)
+    generate_content(client, messages, verbose)
 
-user_prompt = sys.argv[1]
-
-if len(sys.argv) == 3 and sys.argv[2] == "--verbose":
-    verbose_output = True
-else:
-    verbose_output = False
-
-# build messages
-messages = [
-    types.Content(role="user", parts=[types.Part(text=user_prompt)]),
-]
-
-# Get Response
-response = client.models.generate_content(
-    model='gemini-2.0-flash-001', 
-    contents=messages,
-    config=types.GenerateContentConfig(
-        tools=[available_functions], 
-        system_instruction=system_prompt
+def generate_content(client, messages, verbose):
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-001",
+        contents=messages,
+        config=types.GenerateContentConfig(
+            tools=[available_functions], system_instruction=system_prompt
+        ),
     )
-)
+    if verbose:
+        print("Prompt tokens:", response.usage_metadata.prompt_token_count)
+        print("Response tokens:", response.usage_metadata.candidates_token_count)
 
-if verbose_output:
-    x = response.usage_metadata.prompt_token_count
-    y = response.usage_metadata.candidates_token_count
-    print(f'User prompt: "{user_prompt}"')
-    print(f"Prompt tokens: {x}")
-    print(f"Response tokens: {y}")
+    if not response.function_calls:
+        return response.text
 
-if not response.function_calls:
-    print(response.text)
+    function_responses = []
+    for function_call_part in response.function_calls:
+        function_call_result = call_function(function_call_part, verbose)
+        if (
+            not function_call_result.parts
+            or not function_call_result.parts[0].function_response
+        ):
+            raise Exception("empty function call result")
+        if verbose:
+            print(f"-> {function_call_result.parts[0].function_response.response}")
+        function_responses.append(function_call_result.parts[0])
 
-function_responses = []
-for function_call_part in response.function_calls:
-    function_call_result = call_function(function_call_part, verbose_output)
-    if (
-        not function_call_result.parts
-        or not function_call_result.parts[0].function_response
-    ):
-        raise Exception("empty function call result")
-    if verbose_output:
-        print(f"-> {function_call_result.parts[0].function_response.response}")
-    function_responses.append(function_call_result.parts[0])
+    if not function_responses:
+        raise Exception("no function responses generated, exiting.")
 
-if not function_responses:
-    raise Exception("no function responses generated, exiting.")
 
-#function_call_part = response.function_calls
-#if function_call_part:  
-    #print(function_call_part)
-#    for fcp in function_call_part:
-#        #print(f"Calling function: {fcp.name}({fcp.args})")
-#        function_response = call_function(fcp, verbose=verbose_output)
-#        if function_response.parts[0].function_response.response is not None:
-#            if verbose_output:
-#                print(f"-> {function_response.parts[0].function_response.response}")
-#        else: 
-#            raise ValueError(f"Function {fcp.name} did not return a valid response.")
-#else:
-#    print(response.text)
-
+if __name__ == "__main__":
+    main()
 
