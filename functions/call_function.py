@@ -1,5 +1,5 @@
-import sys
 from google.genai import types
+
 from functions.get_files_info import get_files_info, schema_get_files_info
 from functions.get_file_content import get_file_content, schema_get_file_content
 from functions.run_python_file import run_python_file, schema_run_python_file
@@ -19,14 +19,8 @@ def call_function(function_call_part, verbose=False):
 
     function_name = function_call_part.name
     function_args = function_call_part.args
-    wor_dir = "./calculator"
 
-    if len(sys.argv) == 2 and sys.argv[1] == "--verbose":
-        verbose_output = True
-    else:
-        verbose_output = False
-
-    if verbose_output:
+    if verbose:
         print(f" - Calling function: {function_name}({function_args})")
     else:
         print(f" - Calling function: {function_name}")
